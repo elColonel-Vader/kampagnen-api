@@ -1,0 +1,52 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Website Analyzer API",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://kampagnen-api-heki.onrender.com"
+    }
+  ],
+  "paths": {
+    "/crawl-analyze": {
+      "get": {
+        "operationId": "analyzeWebsite",
+        "summary": "Crawlt und analysiert die komplette Website",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Die zu analysierende Website"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Erfolgreiche Analyse",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "url": { "type": "string" },
+                    "title": { "type": "string" },
+                    "text": { "type": "string" },
+                    "images": {
+                      "type": "array",
+                      "items": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
