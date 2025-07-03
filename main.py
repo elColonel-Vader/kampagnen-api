@@ -22,8 +22,17 @@ def is_same_domain(base: str, target: str) -> bool:
 def crawl_analyze(
     url: str = Query(...),
     max_pages: int = Query(5, description="Maximale Anzahl an Seiten"),
-    min_images: int = Query(10, description="Minimale Anzahl an Bildern")
+    min_images: int = Query(10, description="Minimale Anzahl an Bildern"),
+    page_timeout: int = Query(30000, description="Timeout je Seite in Millisekunden")
 ):
+    """Crawlt die angegebene URL und wertet Inhalte aus.
+
+    Args:
+        url: Startadresse der Website.
+        max_pages: Maximale Anzahl von Seiten, die besucht werden.
+        min_images: Mindestanzahl an Bildern im Ergebnis.
+        page_timeout: Zeitlimit für ``page.goto`` in Millisekunden.
+    """
     visited: Set[str] = set()
     to_visit: List[str] = [url]
     all_images: Set[str] = set()
@@ -44,7 +53,7 @@ def crawl_analyze(
             if current_url in visited:
                 continue
             try:
-                page.goto(current_url, timeout=30000)
+                page.goto(current_url, timeout=page_timeout)
                 html = page.content()
                 soup = BeautifulSoup(html, "html.parser")
                 title = soup.title.string.strip() if soup.title else ""
