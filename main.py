@@ -4,14 +4,25 @@ from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from typing import List, Set, Dict
+from fastapi.middleware.gzip import GZipMiddleware
+import re
 
 app = FastAPI()
+
+# Add transparent gzip compression for large responses (>1 kB)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# regex patterns for color extraction (hex and rgb/rgba)
+HEX_COLOR_RE = re.compile(r"#[0-9a-fA-F]{3,6}\b")
+RGB_COLOR_RE = re.compile(r"rgba?\([^)]*\)")
 
 class AnalyzeResponse(BaseModel):
     url: str
     title: str
     text: str
     images: List[str]
+    logos: List[str]
+    colors: List[str]
     crawled_pages: int
 
 # Hilfsfunktion zur Prüfung auf gleiche Domain
@@ -27,6 +38,8 @@ def crawl_analyze(
     visited: Set[str] = set()
     to_visit: List[str] = [url]
     all_images: Set[str] = set()
+    logos_set: Set[str] = set()
+    colors_set: Set[str] = set()
     full_text = ""
     final_title = ""
     crawled_count = 0
@@ -56,12 +69,23 @@ def crawl_analyze(
                 for tag in soup.find_all(["img", "meta", "link", "source"]):
                     src = tag.get("src") or tag.get("content") or tag.get("href") or tag.get("srcset")
                     if src and any(ext in src.lower() for ext in [".jpg", ".jpeg", ".png", ".svg"]):
-                        all_images.add(urljoin(current_url, src))
+                        abs_src = urljoin(current_url, src)
+                        all_images.add(abs_src)
+                        # basic logo heuristics
+                        alt_text = (tag.get("alt") or "").lower()
+                        class_text = " ".join(tag.get("class", [])) if tag.has_attr("class") else ""
+                        if "logo" in src.lower() or "logo" in alt_text or "logo" in class_text.lower():
+                            logos_set.add(abs_src)
 
                 for link in soup.find_all("a", href=True):
                     href = urljoin(current_url, link["href"])
                     if is_same_domain(url, href) and href not in visited and href not in to_visit:
                         to_visit.append(href)
+
+                # extract color codes from raw HTML (includes inline styles & style blocks)
+                colors_found = HEX_COLOR_RE.findall(html) + RGB_COLOR_RE.findall(html)
+                for c in colors_found:
+                    colors_set.add(c.lower())
 
                 visited.add(current_url)
                 crawled_count += 1
@@ -74,10 +98,18 @@ def crawl_analyze(
     while len(all_images) < min_images:
         all_images.add("https://via.placeholder.com/600x400?text=Platzhalter")
 
+    full_text = full_text.strip()
+    # Truncate text to mitigate overly large JSON responses (50 kB by default)
+    MAX_TEXT_CHARS = 50_000
+    if len(full_text) > MAX_TEXT_CHARS:
+        full_text = full_text[:MAX_TEXT_CHARS]
+
     return {
         "url": url,
         "title": final_title,
-        "text": full_text.strip(),
+        "text": full_text,
         "images": list(all_images),
+        "logos": list(logos_set),
+        "colors": list(colors_set)[:20],
         "crawled_pages": crawled_count
     }
