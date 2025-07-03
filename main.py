@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
-from typing import List, Set
+from typing import List, Set, Dict
 
 app = FastAPI()
 
@@ -12,25 +12,31 @@ class AnalyzeResponse(BaseModel):
     title: str
     text: str
     images: List[str]
+    crawled_pages: int
 
 # Hilfsfunktion zur Prüfung auf gleiche Domain
 def is_same_domain(base: str, target: str) -> bool:
     return urlparse(base).netloc == urlparse(target).netloc
 
 @app.get("/crawl-analyze", response_model=AnalyzeResponse)
-def crawl_analyze(url: str = Query(...)):
+def crawl_analyze(
+    url: str = Query(...),
+    max_pages: int = Query(5, description="Maximale Anzahl an Seiten"),
+    min_images: int = Query(10, description="Minimale Anzahl an Bildern")
+):
     visited: Set[str] = set()
     to_visit: List[str] = [url]
     all_images: Set[str] = set()
     full_text = ""
     final_title = ""
+    crawled_count = 0
 
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         context = browser.new_context(java_script_enabled=False)
         page = context.new_page()
 
-        while to_visit and len(visited) < 5:
+        while to_visit and len(visited) < max_pages:
             current_url = to_visit.pop(0)
             if current_url in visited:
                 continue
@@ -44,32 +50,31 @@ def crawl_analyze(url: str = Query(...)):
                     final_title = title
                 full_text += " " + text
 
-                # Bildquellen aus <img>, <meta>, <link>, <source>
                 for tag in soup.find_all(["img", "meta", "link", "source"]):
                     src = tag.get("src") or tag.get("content") or tag.get("href") or tag.get("srcset")
                     if src and any(ext in src.lower() for ext in [".jpg", ".jpeg", ".png", ".svg"]):
                         all_images.add(urljoin(current_url, src))
 
-                # Interne Links sammeln
                 for link in soup.find_all("a", href=True):
                     href = urljoin(current_url, link["href"])
                     if is_same_domain(url, href) and href not in visited and href not in to_visit:
                         to_visit.append(href)
 
                 visited.add(current_url)
+                crawled_count += 1
             except Exception as e:
                 print(f"Fehler bei {current_url}: {e}")
                 continue
 
         browser.close()
 
-    # Mindestens 10 Bilder sicherstellen
-    while len(all_images) < 10:
+    while len(all_images) < min_images:
         all_images.add("https://via.placeholder.com/600x400?text=Platzhalter")
 
     return {
         "url": url,
         "title": final_title,
         "text": full_text.strip(),
-        "images": list(all_images)
+        "images": list(all_images),
+        "crawled_pages": crawled_count
     }
