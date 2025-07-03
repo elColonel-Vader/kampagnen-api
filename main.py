@@ -71,8 +71,12 @@ def crawl_analyze(
 
         browser.close()
 
-    while len(all_images) < min_images:
-        all_images.add("https://via.placeholder.com/600x400?text=Platzhalter")
+    if len(all_images) < min_images:
+        missing = min_images - len(all_images)
+        for i in range(missing):
+            all_images.add(
+                f"https://via.placeholder.com/600x400?text=Platzhalter{i+1}"
+            )
 
     return {
         "url": url,
