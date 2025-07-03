@@ -36,7 +36,8 @@ def crawl_analyze(
     min_images: int = Query(10, description="Minimale Anzahl an Bildern"),
     max_images: int = Query(20, description="Maximal zurückzugebende Bilder"),
     max_logos: int = Query(5, description="Maximal zurückzugebende Logos"),
-    max_colors: int = Query(10, description="Maximal zurückzugebende Farbcodes")
+    max_colors: int = Query(10, description="Maximal zurückzugebende Farbcodes"),
+    max_text_chars: int = Query(10000, description="Maximale Länge des extrahierten Textes (Zeichen)")
 ):
     visited: Set[str] = set()
     to_visit: List[str] = [url]
@@ -107,10 +108,9 @@ def crawl_analyze(
     colors_list = list(colors_set)[:max_colors]
 
     full_text = full_text.strip()
-    # Truncate text to mitigate overly large JSON responses (50 kB by default)
-    MAX_TEXT_CHARS = 50_000
-    if len(full_text) > MAX_TEXT_CHARS:
-        full_text = full_text[:MAX_TEXT_CHARS]
+    # Truncate text to mitigate overly large JSON responses
+    if len(full_text) > max_text_chars:
+        full_text = full_text[:max_text_chars]
 
     return {
         "url": url,
