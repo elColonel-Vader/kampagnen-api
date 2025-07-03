@@ -3,6 +3,13 @@
 
 Diese FastAPI-Anwendung crawlt Websites mit einem Headless-Browser (Playwright) und extrahiert Titel, Text & Bilder.
 
+## Installation
+
+```bash
+pip install -r requirements.txt
+playwright install
+```
+
 ## API
 
 Der Endpunkt `/crawl-analyze` akzeptiert folgende Query-Parameter:
